@@ -1,0 +1,433 @@
+apiVersion: v1
+data:
+  OPTION_A: InfoQ
+  OPTION_B: GeekBang
+  REDIS_HOST: redis
+kind: ConfigMap
+metadata:
+  name: vote-configmap-fk9hbcdc22
+---
+apiVersion: v1
+data:
+  POSTGRES_PASSWORD: cG9zdGdyZXM=
+  POSTGRES_USER: cG9zdGdyZXM=
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+---
+apiVersion: v1
+data:
+  .env: |
+    REJfVVNFUj1wb3N0Z3JlcwpEQl9QQVNTPXBvc3RncmVzCkRCX0hPU1Q9ZGItcGdwb29sCk
+    RCX05BTUU9cG9zdGdyZXMKUkVESVNfSE9TVD1yZWRpcwo=
+kind: Secret
+metadata:
+  name: result-db-secret-f27b2m68tm
+type: Opaque
+---
+apiVersion: v1
+data: {}
+kind: Secret
+metadata:
+  name: worker-db-secret - .env-46f8b28mk5
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: db
+  name: db
+spec:
+  ports:
+  - name: db-service
+    port: 5432
+    targetPort: 5432
+  selector:
+    app: db
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: redis
+  name: redis
+spec:
+  ports:
+  - name: redis-service
+    port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: result
+  name: result
+spec:
+  ports:
+  - name: result-service
+    nodePort: 31001
+    port: 5001
+    targetPort: 80
+  selector:
+    app: result
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: vote
+  name: vote
+spec:
+  ports:
+  - name: vote-service
+    nodePort: 31000
+    port: 5000
+    targetPort: 80
+  selector:
+    app: vote
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: db
+  name: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+      - env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: db-secret
+        envFrom:
+        - secretRef:
+            name: db-secret
+        image: postgres:15-alpine
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - $POSTGRES_USER
+            - -d
+            - $POSTGRES_USER
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: postgres
+        ports:
+        - containerPort: 5432
+          name: postgres
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - $POSTGRES_USER
+            - -d
+            - $POSTGRES_USER
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: db-data
+      volumes:
+      - emptyDir: {}
+        name: db-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: redis
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - image: redis:alpine
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: redis
+        ports:
+        - containerPort: 6379
+          name: redis
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 300m
+            memory: 256Mi
+          requests:
+            cpu: 300m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /data
+          name: redis-data
+      volumes:
+      - emptyDir: {}
+        name: redis-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: result
+  name: result
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: result
+  template:
+    metadata:
+      labels:
+        app: result
+    spec:
+      containers:
+      - image: lyzhang1999/result:env
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        name: result
+        ports:
+        - containerPort: 80
+          name: result
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1280Mi
+          requests:
+            cpu: 500m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /app/.env
+          name: result-db-secret
+          readOnly: true
+          subPath: .env
+      volumes:
+      - name: result-db-secret
+        secret:
+          secretName: result-db-secret-f27b2m68tm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vote
+  name: vote
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vote
+  template:
+    metadata:
+      labels:
+        app: vote
+    spec:
+      containers:
+      - envFrom:
+        - configMapRef:
+            name: vote-configmap-fk9hbcdc22
+        image: lyzhang1999/vote:env
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        name: vote
+        ports:
+        - containerPort: 80
+          name: vote
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1280Mi
+          requests:
+            cpu: 500m
+            memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: worker
+  name: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+      - env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              key: DB_USER
+              name: worker-db-secret
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              key: REDIS_HOST
+              name: worker-db-secret
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              key: DB_PASS
+              name: worker-db-secret
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              key: DB_HOST
+              name: worker-db-secret
+        image: lyzhang1999/worker:env
+        imagePullPolicy: Always
+        name: worker
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1280Mi
+          requests:
+            cpu: 500m
+            memory: 128Mi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: result
+spec:
+  maxReplicas: 2
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 80
+        type: Utilization
+    type: Resource
+  - resource:
+      name: memory
+      target:
+        averageUtilization: 60
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: result
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vote
+spec:
+  maxReplicas: 2
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 80
+        type: Utilization
+    type: Resource
+  - resource:
+      name: memory
+      target:
+        averageUtilization: 60
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vote
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker
+spec:
+  maxReplicas: 2
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 80
+        type: Utilization
+    type: Resource
+  - resource:
+      name: memory
+      target:
+        averageUtilization: 60
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker

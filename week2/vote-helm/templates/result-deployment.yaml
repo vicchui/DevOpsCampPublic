@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: result
+  name: result
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: result
+  template:
+    metadata:
+      labels:
+        app: result
+    spec:
+      volumes:
+      - name: result-db-secret
+        secret:
+          secretName: result-db-secret
+      initContainers:
+        - name: wait-for
+          image: ghcr.io/groundnuty/k8s-wait-for:v2.0
+          args: ["pod","-lapp=vote"]
+      containers:
+#      - image: vicchui/result:v1
+      - image: "{{ .Values.RESULT.IMAGE }}:{{ .Values.RESULT.TAG }}"
+        name: result
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 1000m
+            memory: 1000Mi
+        ports:
+          - containerPort: 80
+            name: result
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+          timeoutSeconds: 1
+        volumeMounts:
+          - name: result-db-secret
+            mountPath: /app/.env
+            # 避免容器內 /app 目錄下所有的文件被覆蓋
+            subPath: .env
+            readOnly: true

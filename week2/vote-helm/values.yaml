@@ -1,0 +1,43 @@
+HOST: demo.local
+
+DB:
+  DB_USER: postgres
+  DB_PASS: postgres
+  DB_HOST: db-pgpool
+  DB_NAME: postgres
+
+REDIS:
+  HOST: redis
+
+RESULT:
+  IMAGE: vicchui/result
+  TAG:  env
+
+VOTE:
+  IMAGE: vicchui/vote
+  TAG: env
+
+WORKER:
+  IMAGE: vicchui/worker
+  TAG: env
+
+OPTION:
+  OPTION_A: InfoQ
+  OPTION_B: GeekBang
+
+redis:
+  enabled: true
+  fullnameOverride: redis
+  auth:
+    enabled: false
+
+postgresql-ha:
+  enabled: true
+  fullnameOverride: db
+  global:
+    postgresql:
+      username: postgres
+      password: postgres
+      database: postgres
+      repmgrUsername: postgres
+      repmgrPassword: postgres

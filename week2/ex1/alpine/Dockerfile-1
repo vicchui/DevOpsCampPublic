@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1
+# use alpine
+# step 1: build golang binary
+FROM golang:1.17 as builder
+WORKDIR /opt/app
+COPY . .
+# RUN go mod init main && go build -o example
+#RUN go mod tidy && go build -o example
+#RUN go mod tidy && go build -tags netgo -ldflags '-extldflags "static"' -o example
+RUN go mod tidy && CGO_ENABLED=0 go build -o example
+
+# step 2: copy binary from step 1
+FROM alpine:latest
+WORKDIR /opt/app
+COPY --from=builder /opt/app/example ./example
+CMD ["/opt/app/example"]

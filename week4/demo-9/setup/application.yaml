@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: yamltoinfra
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/vicchui/DevOpsCamp.git
+    targetRevision: HEAD
+    path: week4/demo-9/yaml2infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: yaml2infra
